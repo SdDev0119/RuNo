@@ -1,3 +1,4 @@
+use dirs_next::data_dir;
 use hex::encode;
 use hmac::{Hmac, Mac};
 use hostname::get;
@@ -6,7 +7,6 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use dirs_next::data_dir;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -54,10 +54,13 @@ fn hash_timestamp(timestamp: u64) -> String {
 /// Create the trial file if it doesn't exist, with the hashed current timestamp.
 #[tauri::command]
 pub fn initialize_trial_file() -> Result<(), String> {
+    println!("initialize_trial_file");
     let mut file_path = data_dir().unwrap();
     file_path.push(TRIAL_FILE_NAME);
 
+    println!("File path resolved to: {:?}", file_path);
     if !file_path.exists() {
+        println!("Trial file does not exist, creating...");
         let start_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -69,7 +72,13 @@ pub fn initialize_trial_file() -> Result<(), String> {
         let mut file = fs::File::create(file_path).expect("Trial date file create failed");
         file.write_all(content.as_bytes())
             .expect("Trial date write failed");
+
+        println!("Trial file created with content: {}", content);
+    } else {
+        println!("Trial file already exists, skipping creation");
     }
+
+    println!("initialize_trial_file completed successfully");
     Ok(())
 }
 
@@ -124,10 +133,23 @@ pub fn is_trial_valid() -> Result<bool, String> {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let elapsed_days = (now - start_time) / 86400;
-    println!(
-        "Trial period {} days remain",
+
+    let elapsed_days = if now > start_time {
+        (now - start_time) / 86400
+    } else {
+        0
+    };
+
+    let remaining_days = if TRIAL_DURATION_DAYS > elapsed_days {
         TRIAL_DURATION_DAYS - elapsed_days
-    );
+    } else {
+        0
+    };
+
+    if remaining_days > 0 {
+        println!("Trial period {} days remain", remaining_days);
+    } else {
+        println!("Trial period expired",);
+    }
     Ok(elapsed_days > TRIAL_DURATION_DAYS)
 }
